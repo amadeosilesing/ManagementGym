@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyToken } from '@/lib/auth/jwt'
+import { verifyToken } from './lib/auth/jwt'
 
 // Rutas que NO requieren autenticación
 const PUBLIC_ROUTES = ['/login']
