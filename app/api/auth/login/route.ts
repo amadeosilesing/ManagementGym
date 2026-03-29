@@ -25,12 +25,14 @@ export async function POST(req: NextRequest) {
 
     const { email, password } = parsed.data
 
-    // Buscar usuario
     const [usuario] = await db
       .select()
       .from(usuarios)
       .where(eq(usuarios.email, email))
       .limit(1)
+
+    console.log('[LOGIN] usuario encontrado:', usuario ? usuario.email : 'ninguno')
+    console.log('[LOGIN] activo:', usuario?.activo)
 
     if (!usuario || !usuario.activo) {
       return NextResponse.json(
@@ -39,8 +41,8 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Verificar contraseña
     const passwordValida = await bcrypt.compare(password, usuario.passwordHash)
+    console.log('[LOGIN] password válida:', passwordValida)
 
     if (!passwordValida) {
       return NextResponse.json(
@@ -49,15 +51,15 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Generar token
-    const token = signToken({
+    const token = await signToken({
       id:     usuario.id,
       nombre: usuario.nombre,
       email:  usuario.email,
       rol:    usuario.rol,
     })
 
-    // Guardar en cookie httpOnly
+    console.log('[LOGIN] token generado:', token.substring(0, 20) + '...')
+
     const response = NextResponse.json(
       { ok: true, nombre: usuario.nombre, rol: usuario.rol },
       { status: 200 }
@@ -67,7 +69,7 @@ export async function POST(req: NextRequest) {
       httpOnly: true,
       secure:   process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge:   60 * 60 * 8, // 8 horas
+      maxAge:   60 * 60 * 8,
       path:     '/',
     })
 

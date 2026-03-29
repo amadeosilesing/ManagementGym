@@ -1,6 +1,6 @@
-import jwt from 'jsonwebtoken'
+import { SignJWT, jwtVerify } from 'jose'
 
-const SECRET = process.env.JWT_SECRET!
+const SECRET = new TextEncoder().encode(process.env.JWT_SECRET as string)
 const EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h'
 
 export interface JWTPayload {
@@ -10,14 +10,20 @@ export interface JWTPayload {
   rol:    'admin' | 'recepcionista'
 }
 
-export function signToken(payload: JWTPayload): string {
-  return jwt.sign(payload, SECRET, { expiresIn: EXPIRES_IN })
+export async function signToken(payload: JWTPayload): Promise<string> {
+  return await new SignJWT({ ...payload })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setExpirationTime(EXPIRES_IN)
+    .setIssuedAt()
+    .sign(SECRET)
 }
 
-export function verifyToken(token: string): JWTPayload | null {
+export async function verifyToken(token: string): Promise<JWTPayload | null> {
   try {
-    return jwt.verify(token, SECRET) as JWTPayload
-  } catch {
+    const { payload } = await jwtVerify(token, SECRET)
+    return payload as unknown as JWTPayload
+  } catch (err) {
+    console.error('[JWT] Error verificando token:', err)
     return null
   }
 }
