@@ -50,6 +50,7 @@ export const miembros = pgTable('miembros', {
   activo:          boolean('activo').notNull().default(true),
   creadoEn:        timestamp('creado_en').notNull().defaultNow(),
   actualizadoEn:   timestamp('actualizado_en').notNull().defaultNow(),
+  genero:          varchar('genero', { length: 10 }),
 })
 
 export const inscripciones = pgTable('inscripciones', {
