@@ -10,11 +10,11 @@ const updateSchema = z.object({
   telefono:        z.string().optional(),
   email:           z.string().email().optional().or(z.literal('')),
   fechaNacimiento: z.string().optional(),
+  genero:          z.string().optional(),
   notas:           z.string().optional(),
   activo:          z.boolean().optional(),
 })
 
-// GET — obtener un miembro por id
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -46,7 +46,6 @@ export async function GET(
   }
 }
 
-// PUT — actualizar miembro
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -90,7 +89,6 @@ export async function PUT(
   }
 }
 
-// DELETE — desactivar miembro (soft delete)
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -98,13 +96,12 @@ export async function DELETE(
   try {
     const { id } = await params
 
-    const [desactivado] = await db
-      .update(miembros)
-      .set({ activo: false, actualizadoEn: new Date() })
+    const [eliminado] = await db
+      .delete(miembros)
       .where(eq(miembros.id, id))
       .returning()
 
-    if (!desactivado) {
+    if (!eliminado) {
       return NextResponse.json(
         { error: 'Miembro no encontrado' },
         { status: 404 }
@@ -116,7 +113,7 @@ export async function DELETE(
   } catch (error) {
     console.error('[MIEMBRO DELETE]', error)
     return NextResponse.json(
-      { error: 'Error al desactivar miembro' },
+      { error: 'Error al eliminar miembro' },
       { status: 500 }
     )
   }
