@@ -74,12 +74,31 @@ export default function PerfilMiembroPage() {
   // Calcular fecha vencimiento en modal
   const planSeleccionado = planes.find((p) => p.id === planId)
   const fechaVencimientoPreview = planSeleccionado
-    ? (() => {
-        const d = new Date()
-        d.setDate(d.getDate() + planSeleccionado.duracionDias)
-        return d.toISOString().split('T')[0]
-      })()
-    : ''
+  ? (() => {
+      const hoy = new Date()
+      hoy.setHours(0, 0, 0, 0)
+
+      let inicio: Date
+
+      if (inscripcionActual) {
+        const vencimientoActual = new Date(inscripcionActual.fechaVencimiento)
+        vencimientoActual.setHours(0, 0, 0, 0)
+
+        if (vencimientoActual >= hoy) {
+          inicio = new Date(vencimientoActual)
+          inicio.setDate(inicio.getDate() + 1)
+        } else {
+          inicio = hoy
+        }
+      } else {
+        inicio = hoy
+      }
+
+      const vencimiento = new Date(inicio)
+      vencimiento.setDate(vencimiento.getDate() + planSeleccionado.duracionDias)
+      return vencimiento.toISOString().split('T')[0]
+    })()
+  : ''
 
   async function fetchData() {
     try {
@@ -537,17 +556,25 @@ export default function PerfilMiembroPage() {
               </div>
 
               {fechaVencimientoPreview && (
-                <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
-                  <svg className="w-4 h-4 text-blue-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                  </svg>
-                  <p className="text-sm text-blue-700">
-                    Vence el <strong>{new Date(fechaVencimientoPreview).toLocaleDateString('es-BO', {
-                      day: '2-digit', month: 'long', year: 'numeric'
-                    })}</strong>
-                  </p>
-                </div>
-              )}
+  <div className="flex flex-col gap-1 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
+    <div className="flex items-center gap-2">
+      <svg className="w-4 h-4 text-blue-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+      </svg>
+      <p className="text-sm text-blue-700">
+        {inscripcionActual && new Date(inscripcionActual.fechaVencimiento) >= new Date()
+          ? 'Se respetan los días restantes'
+          : 'Inicia desde hoy'
+        }
+      </p>
+    </div>
+    <p className="text-sm text-blue-700 pl-6">
+      Vence el <strong>{new Date(fechaVencimientoPreview).toLocaleDateString('es-BO', {
+        day: '2-digit', month: 'long', year: 'numeric'
+      })}</strong>
+    </p>
+  </div>
+)}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">

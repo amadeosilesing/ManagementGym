@@ -185,7 +185,8 @@ export default function DashboardPage() {
               <div className="w-full h-1.5 bg-gray-100 rounded-full">
                 <div
                   className="h-full bg-blue-500 rounded-full"
-                  style={{ width: `${stats.miembros.total > 0 ? (stats.inscripciones.totalActivos / stats.miembros.total) * 100 : 0}%` }}
+                  style={{ width: `${Math.min(100, stats.miembros.total > 0 ? (stats.inscripciones.totalActivos / stats.miembros.total) * 100 : 0)}%` }}
+
                 />
               </div>
             </div>
@@ -197,7 +198,8 @@ export default function DashboardPage() {
               <div className="w-full h-1.5 bg-gray-100 rounded-full">
                 <div
                   className="h-full bg-red-400 rounded-full"
-                  style={{ width: `${stats.miembros.total > 0 ? (stats.inscripciones.vencidos / stats.miembros.total) * 100 : 0}%` }}
+                  style={{ width: `${Math.min(100, stats.miembros.total > 0 ? (stats.inscripciones.vencidos / stats.miembros.total) * 100 : 0)}%` }}
+
                 />
               </div>
             </div>
@@ -209,7 +211,8 @@ export default function DashboardPage() {
               <div className="w-full h-1.5 bg-gray-100 rounded-full">
                 <div
                   className="h-full bg-amber-400 rounded-full"
-                  style={{ width: `${stats.miembros.total > 0 ? (stats.inscripciones.porVencer / stats.miembros.total) * 100 : 0}%` }}
+                  style={{ width: `${Math.min(100, stats.miembros.total > 0 ? (stats.inscripciones.porVencer / stats.miembros.total) * 100 : 0)}%` }}
+
                 />
               </div>
             </div>
