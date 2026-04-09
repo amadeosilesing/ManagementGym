@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { planes } from '@/lib/db/schema'
-import { desc, eq } from 'drizzle-orm'
+import { desc } from 'drizzle-orm'
 import { z } from 'zod'
+import { getSession, isAdmin } from '@/lib/auth/session'
 
 const planSchema = z.object({
   nombre:       z.string().min(1, 'El nombre es requerido'),
@@ -31,6 +32,11 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await getSession()
+    if (!isAdmin(session)) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+    }
+
     const body   = await req.json()
     const parsed = planSchema.safeParse(body)
 

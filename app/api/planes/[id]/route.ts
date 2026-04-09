@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { planes } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
+import { getSession, isAdmin } from '@/lib/auth/session'
 
 const updateSchema = z.object({
   nombre:       z.string().min(1).optional(),
@@ -17,6 +18,11 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession()
+    if (!isAdmin(session)) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+    }
+
     const { id }  = await params
     const body    = await req.json()
     const parsed  = updateSchema.safeParse(body)
@@ -66,6 +72,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession()
+    if (!isAdmin(session)) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+    }
+
     const { id } = await params
 
     const [desactivado] = await db

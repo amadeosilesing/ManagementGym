@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Header from '@/components/layout/Header'
+import { useSession } from '@/lib/auth/client-session'
 
 interface Miembro {
   id:              string
@@ -49,56 +50,55 @@ const estadoConfig: Record<string, { label: string; clase: string }> = {
 }
 
 export default function PerfilMiembroPage() {
-  const { id }  = useParams()
-  const router  = useRouter()
+  const { id }            = useParams()
+  const router            = useRouter()
+  const { session }       = useSession()
+  const esAdmin           = session?.rol === 'admin'
 
-  const [miembro,      setMiembro]      = useState<Miembro | null>(null)
-  const [inscripciones, setInscripciones] = useState<Inscripcion[]>([])
-  const [planes,       setPlanes]       = useState<Plan[]>([])
-  const [loading,      setLoading]      = useState(true)
-  const [error,        setError]        = useState('')
-  const [editando,     setEditando]     = useState(false)
-  const [saving,       setSaving]       = useState(false)
-  const [formError,    setFormError]    = useState('')
-
-  // Modal renovación
-  const [modalRenovar, setModalRenovar] = useState(false)
-  const [planId,       setPlanId]       = useState('')
-  const [monto,        setMonto]        = useState('')
-  const [metodo,       setMetodo]       = useState('efectivo')
-  const [renovando,    setRenovando]    = useState(false)
-  const [renovarError, setRenovarError] = useState('')
+  const [miembro,        setMiembro]        = useState<Miembro | null>(null)
+  const [inscripciones,  setInscripciones]  = useState<Inscripcion[]>([])
+  const [planes,         setPlanes]         = useState<Plan[]>([])
+  const [loading,        setLoading]        = useState(true)
+  const [error,          setError]          = useState('')
+  const [editando,       setEditando]       = useState(false)
+  const [saving,         setSaving]         = useState(false)
+  const [formError,      setFormError]      = useState('')
+  const [modalRenovar,   setModalRenovar]   = useState(false)
+  const [planId,         setPlanId]         = useState('')
+  const [monto,          setMonto]          = useState('')
+  const [metodo,         setMetodo]         = useState('efectivo')
+  const [renovando,      setRenovando]      = useState(false)
+  const [renovarError,   setRenovarError]   = useState('')
 
   const inscripcionActual = inscripciones[0] ?? null
 
-  // Calcular fecha vencimiento en modal
   const planSeleccionado = planes.find((p) => p.id === planId)
+
   const fechaVencimientoPreview = planSeleccionado
-  ? (() => {
-      const hoy = new Date()
-      hoy.setHours(0, 0, 0, 0)
+    ? (() => {
+        const hoy = new Date()
+        hoy.setHours(0, 0, 0, 0)
 
-      let inicio: Date
+        let inicio: Date
 
-      if (inscripcionActual) {
-        const vencimientoActual = new Date(inscripcionActual.fechaVencimiento)
-        vencimientoActual.setHours(0, 0, 0, 0)
-
-        if (vencimientoActual >= hoy) {
-          inicio = new Date(vencimientoActual)
-          inicio.setDate(inicio.getDate() + 1)
+        if (inscripcionActual) {
+          const vencimientoActual = new Date(inscripcionActual.fechaVencimiento)
+          vencimientoActual.setHours(0, 0, 0, 0)
+          if (vencimientoActual >= hoy) {
+            inicio = new Date(vencimientoActual)
+            inicio.setDate(inicio.getDate() + 1)
+          } else {
+            inicio = hoy
+          }
         } else {
           inicio = hoy
         }
-      } else {
-        inicio = hoy
-      }
 
-      const vencimiento = new Date(inicio)
-      vencimiento.setDate(vencimiento.getDate() + planSeleccionado.duracionDias)
-      return vencimiento.toISOString().split('T')[0]
-    })()
-  : ''
+        const vencimiento = new Date(inicio)
+        vencimiento.setDate(vencimiento.getDate() + planSeleccionado.duracionDias)
+        return vencimiento.toISOString().split('T')[0]
+      })()
+    : ''
 
   async function fetchData() {
     try {
@@ -124,7 +124,6 @@ export default function PerfilMiembroPage() {
 
   useEffect(() => { fetchData() }, [id])
 
-  // Autocompletar monto al seleccionar plan
   useEffect(() => {
     if (planSeleccionado) setMonto(planSeleccionado.precio)
   }, [planId])
@@ -184,14 +183,6 @@ export default function PerfilMiembroPage() {
     } catch { alert('Error al reactivar') }
   }
 
-  async function handleEliminar() {
-    if (!confirm('¿Eliminar permanentemente este miembro? Esta acción no se puede deshacer.')) return
-    try {
-      await fetch(`/api/miembros/${id}`, { method: 'DELETE' })
-      router.push('/miembros')
-    } catch { alert('Error al eliminar') }
-  }
-
   async function handleRenovar(e: React.FormEvent) {
     e.preventDefault()
     setRenovando(true)
@@ -247,12 +238,14 @@ export default function PerfilMiembroPage() {
     <>
       <Header titulo={`${miembro.nombre} ${miembro.apellido}`} subtitulo={`CI: ${miembro.ci}`}>
         <button onClick={() => router.push('/miembros')}
-          className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer">
+          className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-xl
+                     hover:bg-gray-50 transition-colors cursor-pointer">
           Volver
         </button>
         {!editando && (
           <button onClick={() => setEditando(true)}
-            className="px-4 py-2 text-sm font-semibold text-white bg-[#185FA5] hover:bg-[#0C447C] rounded-xl transition-colors cursor-pointer">
+            className="px-4 py-2 text-sm font-semibold text-white bg-[#185FA5]
+                       hover:bg-[#0C447C] rounded-xl transition-colors cursor-pointer">
             Editar
           </button>
         )}
@@ -339,10 +332,7 @@ export default function PerfilMiembroPage() {
           ) : (
             <div className="flex flex-col items-center justify-center py-6 text-center">
               <p className="text-sm text-gray-400 mb-3">Sin membresía registrada</p>
-              <button
-                onClick={() => setModalRenovar(true)}
-                className="text-sm text-[#185FA5] hover:underline"
-              >
+              <button onClick={() => setModalRenovar(true)} className="text-sm text-[#185FA5] hover:underline">
                 Crear primera inscripción
               </button>
             </div>
@@ -433,11 +423,13 @@ export default function PerfilMiembroPage() {
 
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setEditando(false)}
-                  className="px-5 py-2.5 text-sm text-gray-600 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer">
+                  className="px-5 py-2.5 text-sm text-gray-600 border border-gray-300 rounded-xl
+                             hover:bg-gray-50 transition-colors cursor-pointer">
                   Cancelar
                 </button>
                 <button type="submit" disabled={saving}
-                  className="px-5 py-2.5 text-sm font-semibold text-white bg-[#185FA5] hover:bg-[#0C447C] disabled:bg-blue-300 rounded-xl transition-colors cursor-pointer">
+                  className="px-5 py-2.5 text-sm font-semibold text-white bg-[#185FA5]
+                             hover:bg-[#0C447C] disabled:bg-blue-300 rounded-xl transition-colors cursor-pointer">
                   {saving ? 'Guardando...' : 'Guardar cambios'}
                 </button>
               </div>
@@ -470,9 +462,9 @@ export default function PerfilMiembroPage() {
           )}
         </div>
 
-        {/* Zona de acciones */}
-        {!editando && (
-          <div className="bg-white rounded-2xl border border-red-100 p-5 flex flex-col gap-4">
+        {/* Zona de acciones — solo admin */}
+        {!editando && esAdmin && (
+          <div className="bg-white rounded-2xl border border-gray-200 p-5 flex flex-col gap-4">
             {miembro.activo ? (
               <div>
                 <p className="text-sm font-medium text-gray-900 mb-1">Desactivar miembro</p>
@@ -480,7 +472,8 @@ export default function PerfilMiembroPage() {
                   El miembro no podrá ser inscrito hasta que sea reactivado. Su historial se conservará.
                 </p>
                 <button onClick={handleDesactivar}
-                  className="px-4 py-2 text-sm font-medium text-amber-600 border border-amber-200 rounded-xl hover:bg-amber-50 transition-colors cursor-pointer">
+                  className="px-4 py-2 text-sm font-medium text-amber-600 border border-amber-200
+                             rounded-xl hover:bg-amber-50 transition-colors cursor-pointer">
                   Desactivar miembro
                 </button>
               </div>
@@ -491,24 +484,12 @@ export default function PerfilMiembroPage() {
                   El miembro volverá a estar disponible para nuevas inscripciones.
                 </p>
                 <button onClick={handleReactivar}
-                  className="px-4 py-2 text-sm font-medium text-green-600 border border-green-200 rounded-xl hover:bg-green-50 transition-colors cursor-pointer">
+                  className="px-4 py-2 text-sm font-medium text-green-600 border border-green-200
+                             rounded-xl hover:bg-green-50 transition-colors cursor-pointer">
                   Reactivar miembro
                 </button>
               </div>
             )}
-
-            <div className="border-t border-red-100"/>
-
-            <div>
-              <p className="text-sm font-medium text-gray-900 mb-1">Eliminar miembro</p>
-              <p className="text-xs text-gray-500 mb-3">
-                Esta acción es permanente y no se puede deshacer.
-              </p>
-              <button onClick={handleEliminar}
-                className="px-4 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors cursor-pointer">
-                Eliminar permanentemente
-              </button>
-            </div>
           </div>
         )}
 
@@ -523,9 +504,7 @@ export default function PerfilMiembroPage() {
           <div className="bg-white rounded-2xl border border-gray-200 p-6 w-full max-w-md">
 
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-semibold text-gray-900">
-                Renovar membresía
-              </h2>
+              <h2 className="text-base font-semibold text-gray-900">Renovar membresía</h2>
               <button onClick={() => setModalRenovar(false)}
                 className="text-gray-400 hover:text-gray-600 cursor-pointer">
                 <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -540,12 +519,7 @@ export default function PerfilMiembroPage() {
                 <label className="text-sm font-medium text-gray-700">
                   Plan <span className="text-red-500">*</span>
                 </label>
-                <select
-                  required
-                  value={planId}
-                  onChange={(e) => setPlanId(e.target.value)}
-                  className={inputClass}
-                >
+                <select required value={planId} onChange={(e) => setPlanId(e.target.value)} className={inputClass}>
                   <option value="">Seleccionar plan...</option>
                   {planes.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -556,50 +530,39 @@ export default function PerfilMiembroPage() {
               </div>
 
               {fechaVencimientoPreview && (
-  <div className="flex flex-col gap-1 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
-    <div className="flex items-center gap-2">
-      <svg className="w-4 h-4 text-blue-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-      </svg>
-      <p className="text-sm text-blue-700">
-        {inscripcionActual && new Date(inscripcionActual.fechaVencimiento) >= new Date()
-          ? 'Se respetan los días restantes'
-          : 'Inicia desde hoy'
-        }
-      </p>
-    </div>
-    <p className="text-sm text-blue-700 pl-6">
-      Vence el <strong>{new Date(fechaVencimientoPreview).toLocaleDateString('es-BO', {
-        day: '2-digit', month: 'long', year: 'numeric'
-      })}</strong>
-    </p>
-  </div>
-)}
+                <div className="flex flex-col gap-1 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-blue-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    <p className="text-sm text-blue-700">
+                      {inscripcionActual && new Date(inscripcionActual.fechaVencimiento) >= new Date()
+                        ? 'Se respetan los días restantes'
+                        : 'Inicia desde hoy'
+                      }
+                    </p>
+                  </div>
+                  <p className="text-sm text-blue-700 pl-6">
+                    Vence el <strong>{new Date(fechaVencimientoPreview).toLocaleDateString('es-BO', {
+                      day: '2-digit', month: 'long', year: 'numeric'
+                    })}</strong>
+                  </p>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-gray-700">
                     Monto (Bs.) <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="number"
-                    required
-                    min={0}
-                    step="0.01"
-                    value={monto}
-                    onChange={(e) => setMonto(e.target.value)}
-                    className={inputClass}
-                  />
+                  <input type="number" required min={0} step="0.01" value={monto}
+                    onChange={(e) => setMonto(e.target.value)} className={inputClass}/>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-gray-700">
-                    Método de pago <span className="text-red-500">*</span>
+                    Método <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    value={metodo}
-                    onChange={(e) => setMetodo(e.target.value)}
-                    className={inputClass}
-                  >
+                  <select value={metodo} onChange={(e) => setMetodo(e.target.value)} className={inputClass}>
                     <option value="efectivo">Efectivo</option>
                     <option value="transferencia">Transferencia</option>
                     <option value="tarjeta">Tarjeta</option>
@@ -616,11 +579,13 @@ export default function PerfilMiembroPage() {
 
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setModalRenovar(false)}
-                  className="px-5 py-2.5 text-sm text-gray-600 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer">
+                  className="px-5 py-2.5 text-sm text-gray-600 border border-gray-300 rounded-xl
+                             hover:bg-gray-50 transition-colors cursor-pointer">
                   Cancelar
                 </button>
                 <button type="submit" disabled={renovando}
-                  className="px-5 py-2.5 text-sm font-semibold text-white bg-[#185FA5] hover:bg-[#0C447C] disabled:bg-blue-300 rounded-xl transition-colors cursor-pointer">
+                  className="px-5 py-2.5 text-sm font-semibold text-white bg-[#185FA5]
+                             hover:bg-[#0C447C] disabled:bg-blue-300 rounded-xl transition-colors cursor-pointer">
                   {renovando ? 'Renovando...' : 'Confirmar renovación'}
                 </button>
               </div>

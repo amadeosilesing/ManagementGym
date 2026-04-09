@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { miembros } from '@/lib/db/schema'
+import { miembros, inscripciones, pagos } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
+import { getSession, isAdmin } from '@/lib/auth/session'
 
 const updateSchema = z.object({
   nombre:          z.string().min(1).optional(),
@@ -62,6 +63,17 @@ export async function PUT(
       )
     }
 
+    // Solo admin puede desactivar/reactivar
+    if (parsed.data.activo !== undefined) {
+      const session = await getSession()
+      if (!isAdmin(session)) {
+        return NextResponse.json(
+          { error: 'No autorizado' },
+          { status: 403 }
+        )
+      }
+    }
+
     const [actualizado] = await db
       .update(miembros)
       .set({
@@ -94,19 +106,36 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
-
-    const [eliminado] = await db
-      .delete(miembros)
-      .where(eq(miembros.id, id))
-      .returning()
-
-    if (!eliminado) {
+    const session = await getSession()
+    if (!isAdmin(session)) {
       return NextResponse.json(
-        { error: 'Miembro no encontrado' },
-        { status: 404 }
+        { error: 'No autorizado' },
+        { status: 403 }
       )
     }
+
+    const { id } = await params
+
+    await db.transaction(async (tx) => {
+      const inscripcionesMiembro = await tx
+        .select({ id: inscripciones.id })
+        .from(inscripciones)
+        .where(eq(inscripciones.miembroId, id))
+
+      for (const insc of inscripcionesMiembro) {
+        await tx
+          .delete(pagos)
+          .where(eq(pagos.inscripcionId, insc.id))
+      }
+
+      await tx
+        .delete(inscripciones)
+        .where(eq(inscripciones.miembroId, id))
+
+      await tx
+        .delete(miembros)
+        .where(eq(miembros.id, id))
+    })
 
     return NextResponse.json({ ok: true })
 
