@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { miembros } from '@/lib/db/schema'
-import { ilike, or, desc } from 'drizzle-orm'
+import { ilike, or, desc, count, sql } from 'drizzle-orm'
 import { z } from 'zod'
 
 const miembroSchema = z.object({
@@ -11,34 +11,75 @@ const miembroSchema = z.object({
   telefono:        z.string().optional(),
   email:           z.string().email('Email inválido').optional().or(z.literal('')),
   fechaNacimiento: z.string().optional(),
-  notas:           z.string().optional(),
   genero:          z.enum(['masculino', 'femenino', 'otro']).optional(),
+  notas:           z.string().optional(),
 })
 
-// GET — listar miembros con búsqueda opcional
+const LIMIT = 10
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const search = searchParams.get('search') || ''
+    const estado = searchParams.get('estado') || 'todos'
+    const page   = Math.max(1, parseInt(searchParams.get('page')  || '1'))
+    const limit  = Math.max(1, parseInt(searchParams.get('limit') || String(LIMIT)))
+    const offset = (page - 1) * limit
 
-    const lista = search
-      ? await db
-          .select()
-          .from(miembros)
-          .where(
-            or(
-              ilike(miembros.nombre,   `%${search}%`),
-              ilike(miembros.apellido, `%${search}%`),
-              ilike(miembros.ci,       `%${search}%`),
-            )
-          )
-          .orderBy(desc(miembros.creadoEn))
-      : await db
-          .select()
-          .from(miembros)
-          .orderBy(desc(miembros.creadoEn))
+    const searchCondition = search
+      ? or(
+          ilike(miembros.nombre,   `%${search}%`),
+          ilike(miembros.apellido, `%${search}%`),
+          ilike(miembros.ci,       `%${search}%`),
+        )
+      : undefined
 
-    return NextResponse.json(lista)
+    const estadoCondition = estado === 'activo'
+      ? sql`${miembros.activo} = true`
+      : estado === 'inactivo'
+      ? sql`${miembros.activo} = false`
+      : undefined
+
+    const conditions = [searchCondition, estadoCondition].filter(Boolean)
+    const whereClause = conditions.length > 0
+      ? sql`${conditions.reduce((acc, cond) => sql`${acc} AND ${cond}`)}`
+      : undefined
+
+    const [{ total }] = await db
+      .select({ total: count() })
+      .from(miembros)
+      .$dynamic()
+      .where(whereClause as never)
+
+    const [conteos] = await db
+      .select({
+        todos:    sql<number>`COUNT(*)`,
+        activos:  sql<number>`COUNT(*) FILTER (WHERE ${miembros.activo} = true)`,
+        inactivos: sql<number>`COUNT(*) FILTER (WHERE ${miembros.activo} = false)`,
+      })
+      .from(miembros)
+
+    const lista = await db
+      .select()
+      .from(miembros)
+      .$dynamic()
+      .where(whereClause as never)
+      .orderBy(desc(miembros.creadoEn))
+      .limit(limit)
+      .offset(offset)
+
+    return NextResponse.json({
+      data:       lista,
+      total:      Number(total),
+      page,
+      limit,
+      totalPages: Math.ceil(Number(total) / limit),
+      conteos: {
+        todos:    Number(conteos.todos),
+        activo:   Number(conteos.activos),
+        inactivo: Number(conteos.inactivos),
+      },
+    })
 
   } catch (error) {
     console.error('[MIEMBROS GET]', error)
@@ -49,7 +90,6 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST — crear miembro
 export async function POST(req: NextRequest) {
   try {
     const body   = await req.json()
@@ -70,11 +110,11 @@ export async function POST(req: NextRequest) {
         nombre:          data.nombre,
         apellido:        data.apellido,
         ci:              data.ci,
-        telefono:        data.telefono || null,
-        email:           data.email    || null,
+        telefono:        data.telefono    || null,
+        email:           data.email       || null,
         fechaNacimiento: data.fechaNacimiento || null,
-        notas:           data.notas    || null,
-        genero:          data.genero   || null,
+        genero:          data.genero      || null,
+        notas:           data.notas       || null,
       })
       .returning()
 
@@ -82,20 +122,15 @@ export async function POST(req: NextRequest) {
 
   } catch (error: unknown) {
     console.error('[MIEMBROS POST]', error)
-
-    // CI duplicado
     if (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      (error as { code: string }).code === '23505'
+      typeof error === 'object' && error !== null &&
+      'code' in error && (error as { code: string }).code === '23505'
     ) {
       return NextResponse.json(
         { error: 'Ya existe un miembro con ese CI' },
         { status: 409 }
       )
     }
-
     return NextResponse.json(
       { error: 'Error al crear miembro' },
       { status: 500 }
