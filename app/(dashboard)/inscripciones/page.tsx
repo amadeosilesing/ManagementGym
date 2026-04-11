@@ -1,11 +1,19 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import Header from '@/components/layout/Header'
+import {
+  SearchInput,
+  FilterTabs,
+  Pagination,
+  Badge,
+  Avatar,
+} from '@/components/ui'
 
 interface Inscripcion {
   id:               string
+  miembroId:        string
   miembroNombre:    string
   miembroApellido:  string
   miembroCi:        string
@@ -17,42 +25,79 @@ interface Inscripcion {
   diasRestantes:    number
 }
 
-const estadoConfig: Record<string, { label: string; clase: string }> = {
-  activo:     { label: 'Activo',      clase: 'bg-green-50 text-green-700'   },
-  por_vencer: { label: 'Por vencer',  clase: 'bg-amber-50 text-amber-700'   },
-  vencido:    { label: 'Vencido',     clase: 'bg-red-50 text-red-600'       },
-  suspendido: { label: 'Suspendido',  clase: 'bg-gray-100 text-gray-500'    },
-  cancelado:  { label: 'Cancelado',   clase: 'bg-gray-100 text-gray-500'    },
+interface Paginacion {
+  total:      number
+  page:       number
+  limit:      number
+  totalPages: number
 }
+
+interface Conteos {
+  todos:      number
+  activo:     number
+  por_vencer: number
+  vencido:    number
+}
+
+const estadoConfig: Record<string, { label: string; clase: string }> = {
+  activo:     { label: 'Activo',     clase: 'bg-green-50 text-green-700'  },
+  por_vencer: { label: 'Por vencer', clase: 'bg-amber-50 text-amber-700'  },
+  vencido:    { label: 'Vencido',    clase: 'bg-red-50 text-red-600'      },
+  suspendido: { label: 'Suspendido', clase: 'bg-gray-100 text-gray-500'   },
+  cancelado:  { label: 'Cancelado',  clase: 'bg-gray-100 text-gray-500'   },
+}
+
+const LIMIT = 10
 
 export default function InscripcionesPage() {
   const [inscripciones, setInscripciones] = useState<Inscripcion[]>([])
+  const [paginacion,    setPaginacion]    = useState<Paginacion>({ total: 0, page: 1, limit: LIMIT, totalPages: 0 })
+  const [conteos,       setConteos]       = useState<Conteos>({ todos: 0, activo: 0, por_vencer: 0, vencido: 0 })
   const [loading,       setLoading]       = useState(true)
+  const [search,        setSearch]        = useState('')
   const [filtro,        setFiltro]        = useState('todos')
+  const [page,          setPage]          = useState(1)
 
-  async function fetchInscripciones() {
+  const fetchInscripciones = useCallback(async (
+    searchVal: string,
+    filtroVal: string,
+    pageVal:   number
+  ) => {
     setLoading(true)
     try {
-      const res  = await fetch('/api/inscripciones')
+      const params = new URLSearchParams({
+        search: searchVal,
+        estado: filtroVal,
+        page:   String(pageVal),
+        limit:  String(LIMIT),
+      })
+      const res  = await fetch(`/api/inscripciones?${params}`)
       const data = await res.json()
-      setInscripciones(data)
+      setInscripciones(data.data)
+      setPaginacion({ total: data.total, page: data.page, limit: data.limit, totalPages: data.totalPages })
+      setConteos(data.conteos ?? { todos: 0, activo: 0, por_vencer: 0, vencido: 0 })
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { fetchInscripciones() }, [])
+  useEffect(() => {
+    const timer = setTimeout(() => { setPage(1); fetchInscripciones(search, filtro, 1) }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
 
-  const filtradas = filtro === 'todos'
-    ? inscripciones
-    : inscripciones.filter((i) => i.estadoActual === filtro)
+  useEffect(() => {
+    fetchInscripciones(search, filtro, page)
+  }, [filtro, page])
 
-  const conteos = {
-    todos:      inscripciones.length,
-    activo:     inscripciones.filter((i) => i.estadoActual === 'activo').length,
-    por_vencer: inscripciones.filter((i) => i.estadoActual === 'por_vencer').length,
-    vencido:    inscripciones.filter((i) => i.estadoActual === 'vencido').length,
-  }
+  function handleFiltro(f: string) { setFiltro(f); setPage(1) }
+
+  const tabs = [
+    { key: 'todos',      label: 'Todos',      count: conteos.todos      },
+    { key: 'activo',     label: 'Activos',    count: conteos.activo     },
+    { key: 'por_vencer', label: 'Por vencer', count: conteos.por_vencer },
+    { key: 'vencido',    label: 'Vencidos',   count: conteos.vencido    },
+  ]
 
   return (
     <>
@@ -69,33 +114,22 @@ export default function InscripcionesPage() {
         </Link>
       </Header>
 
-      {/* Filtros */}
-      <div className="flex gap-2 mb-5">
-        {[
-          { key: 'todos',      label: 'Todos',       count: conteos.todos      },
-          { key: 'activo',     label: 'Activos',     count: conteos.activo     },
-          { key: 'por_vencer', label: 'Por vencer',  count: conteos.por_vencer },
-          { key: 'vencido',    label: 'Vencidos',    count: conteos.vencido    },
-        ].map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setFiltro(f.key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-colors cursor-pointer
-              ${filtro === f.key
-                ? 'bg-[#185FA5] text-white font-medium'
-                : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-              }`}
-          >
-            {f.label}
-            <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium
-              ${filtro === f.key ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
-              {f.count}
+      <div className="flex flex-col gap-3 mb-5">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por nombre, CI o plan..."
+        />
+        <div className="flex items-center gap-3">
+          <FilterTabs tabs={tabs} active={filtro} onChange={handleFiltro} />
+          {paginacion.total > 0 && (
+            <span className="ml-auto text-xs text-gray-400">
+              {paginacion.total} resultado{paginacion.total !== 1 ? 's' : ''}
             </span>
-          </button>
-        ))}
+          )}
+        </div>
       </div>
 
-      {/* Tabla */}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -111,29 +145,29 @@ export default function InscripcionesPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="text-center py-12 text-gray-400 text-sm">
-                  Cargando...
-                </td>
+                <td colSpan={6} className="text-center py-12 text-gray-400 text-sm">Cargando...</td>
               </tr>
-            ) : filtradas.length === 0 ? (
+            ) : inscripciones.length === 0 ? (
               <tr>
                 <td colSpan={6} className="text-center py-12 text-gray-400 text-sm">
-                  No hay inscripciones registradas
+                  {search || filtro !== 'todos' ? 'No se encontraron resultados' : 'No hay inscripciones registradas'}
                 </td>
               </tr>
             ) : (
-              filtradas.map((i) => {
+              inscripciones.map((i) => {
                 const estado = estadoConfig[i.estadoActual] ?? estadoConfig.cancelado
                 return (
                   <tr key={i.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-[#E6F1FB] flex items-center justify-center
-                                        text-xs font-semibold text-[#185FA5] shrink-0">
-                          {i.miembroNombre[0]}{i.miembroApellido[0]}
-                        </div>
+                        <Avatar nombre={i.miembroNombre} apellido={i.miembroApellido} />
                         <div>
-                          <p className="font-medium text-gray-900">{i.miembroNombre} {i.miembroApellido}</p>
+                          <Link
+                            href={`/miembros/${i.miembroId}`}
+                            className="font-medium text-gray-900 hover:text-[#185FA5] transition-colors"
+                          >
+                            {i.miembroNombre} {i.miembroApellido}
+                          </Link>
                           <p className="text-xs text-gray-400">CI: {i.miembroCi}</p>
                         </div>
                       </div>
@@ -150,22 +184,14 @@ export default function InscripcionesPage() {
                     </td>
                     <td className="px-5 py-4">
                       <span className={`text-sm font-medium
-                        ${i.diasRestantes < 0
-                          ? 'text-red-500'
-                          : i.diasRestantes <= 7
-                          ? 'text-amber-600'
-                          : 'text-gray-700'
-                        }`}>
+                        ${i.diasRestantes < 0 ? 'text-red-500' : i.diasRestantes <= 7 ? 'text-amber-600' : 'text-gray-700'}`}>
                         {i.diasRestantes < 0
-                          ? `Venció hace ${Math.abs(i.diasRestantes)} días`
-                          : `${i.diasRestantes} días`
-                        }
+                          ? `Venció hace ${Math.abs(i.diasRestantes)}d`
+                          : `${i.diasRestantes} días`}
                       </span>
                     </td>
                     <td className="px-5 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium ${estado.clase}`}>
-                        {estado.label}
-                      </span>
+                      <Badge label={estado.label} clase={estado.clase} />
                     </td>
                   </tr>
                 )
@@ -173,6 +199,13 @@ export default function InscripcionesPage() {
             )}
           </tbody>
         </table>
+
+        <Pagination
+          page={page}
+          totalPages={paginacion.totalPages}
+          total={paginacion.total}
+          onChange={setPage}
+        />
       </div>
     </>
   )
