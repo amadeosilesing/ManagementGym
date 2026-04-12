@@ -1,22 +1,40 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import Header from '@/components/layout/Header'
+import { PeriodFilter } from '@/components/ui'
+
+const MESES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+]
 
 interface Stats {
+  periodo: {
+    mes:            number
+    anio:           number
+    inicioPeriodo:  string
+    finPeriodo:     string
+  }
   inscripciones: {
-    totalActivos:  number
-    porVencer:     number
-    vencidos:      number
-    nuevosEsteMes: number
+    nuevas:         number
+    activas:        number
+    porVencer:      number
+    vencidas:       number
+    nuevasAnterior: number
+    variacion:      string | null
   }
   miembros: {
     total: number
   }
   ingresos: {
-    esteMes:     number
-    mesAnterior: number
+    total:         number
+    anterior:      number
+    efectivo:      number
+    transferencia: number
+    tarjeta:       number
+    variacion:     string | null
   }
   porVencerDetalle: {
     id:               string
@@ -27,206 +45,226 @@ interface Stats {
     fechaVencimiento: string
     diasRestantes:    number
   }[]
-  ingresosPorMes: {
-    mes:   string
+  ingresosPorDia: {
+    dia:   string
+    total: number
+  }[]
+  inscripcionesPorDia: {
+    dia:   string
     total: number
   }[]
 }
 
 export default function DashboardPage() {
-  const [stats,   setStats]   = useState<Stats | null>(null)
-  const [loading, setLoading] = useState(true)
+  const hoy                         = new Date()
+  const [mes,     setMes]           = useState(hoy.getMonth() + 1)
+  const [anio,    setAnio]          = useState(hoy.getFullYear())
+  const [stats,   setStats]         = useState<Stats | null>(null)
+  const [loading, setLoading]       = useState(true)
 
-  useEffect(() => {
-    fetch('/api/dashboard/stats')
-      .then((r) => r.json())
-      .then((d) => setStats(d))
-      .finally(() => setLoading(false))
+  const fetchStats = useCallback(async (m: number, a: number) => {
+    setLoading(true)
+    try {
+      const res  = await fetch(`/api/dashboard/stats?mes=${m}&anio=${a}`)
+      const data = await res.json()
+      setStats(data)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  const variacionIngresos = stats
-    ? stats.ingresos.mesAnterior > 0
-      ? (((stats.ingresos.esteMes - stats.ingresos.mesAnterior) / stats.ingresos.mesAnterior) * 100).toFixed(1)
-      : null
-    : null
+  useEffect(() => { fetchStats(mes, anio) }, [mes, anio])
 
-  if (loading) {
+  function handlePeriod(m: number, a: number) {
+    setMes(m)
+    setAnio(a)
+  }
+
+  const fmt = (n: number) =>
+    `Bs. ${n.toLocaleString('es-BO', { minimumFractionDigits: 2 })}`
+
+  const variacionLabel = (v: string | null, positiveGood = true) => {
+    if (!v) return null
+    const num      = parseFloat(v)
+    const positivo = num >= 0
+    const bueno    = positiveGood ? positivo : !positivo
     return (
-      <div className="flex items-center justify-center h-64 text-gray-400 text-sm">
-        Cargando...
-      </div>
+      <span className={`text-xs font-medium ${bueno ? 'text-green-600' : 'text-red-500'}`}>
+        {positivo ? '+' : ''}{v}% vs mes anterior
+      </span>
     )
   }
 
+  if (loading) return (
+    <div className="flex items-center justify-center h-64 text-gray-400 text-sm">Cargando...</div>
+  )
+
   if (!stats) return null
 
-  const tarjetas = [
-    {
-      label:  'Miembros activos',
-      valor:  stats.inscripciones.totalActivos,
-      color:  'text-blue-600',
-      bg:     'bg-blue-50',
-      icono: (
-        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#185FA5" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
-        </svg>
-      ),
-    },
-    {
-      label:  'Por vencer (7 días)',
-      valor:  stats.inscripciones.porVencer,
-      color:  'text-amber-600',
-      bg:     'bg-amber-50',
-      icono: (
-        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#D97706" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-      ),
-    },
-    {
-      label:  'Vencidos',
-      valor:  stats.inscripciones.vencidos,
-      color:  'text-red-500',
-      bg:     'bg-red-50',
-      icono: (
-        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#EF4444" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-        </svg>
-      ),
-    },
-    {
-      label:  'Nuevos este mes',
-      valor:  stats.inscripciones.nuevosEsteMes,
-      color:  'text-green-600',
-      bg:     'bg-green-50',
-      icono: (
-        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#16A34A" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
-        </svg>
-      ),
-    },
-  ]
-
-  const maxIngreso = Math.max(...stats.ingresosPorMes.map((m) => m.total), 1)
+  const maxIngreso      = Math.max(...stats.ingresosPorDia.map((d) => d.total), 1)
+  const maxInscripcion  = Math.max(...stats.inscripcionesPorDia.map((d) => d.total), 1)
+  const esMesActual     = mes === hoy.getMonth() + 1 && anio === hoy.getFullYear()
 
   return (
     <>
       <Header
         titulo="Dashboard"
-        subtitulo={`Resumen general — ${new Date().toLocaleDateString('es-BO', { day: '2-digit', month: 'long', year: 'numeric' })}`}
-      />
+        subtitulo={`${MESES[mes - 1]} ${anio}`}
+      >
+        <PeriodFilter mes={mes} anio={anio} onChange={handlePeriod} />
+      </Header>
 
-      {/* Tarjetas de estadísticas */}
+      {/* Tarjetas principales */}
       <div className="grid grid-cols-4 gap-4 mb-6">
-        {tarjetas.map((t) => (
-          <div key={t.label} className="bg-white rounded-2xl border border-gray-200 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs text-gray-500">{t.label}</p>
-              <div className={`w-8 h-8 ${t.bg} rounded-lg flex items-center justify-center`}>
-                {t.icono}
-              </div>
+
+        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs text-gray-500">Inscripciones nuevas</p>
+            <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#185FA5" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+              </svg>
             </div>
-            <p className={`text-3xl font-bold ${t.color}`}>{t.valor}</p>
           </div>
-        ))}
+          <p className="text-3xl font-bold text-blue-600">{stats.inscripciones.nuevas}</p>
+          <div className="mt-1">{variacionLabel(stats.inscripciones.variacion)}</div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs text-gray-500">Miembros activos</p>
+            <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center">
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#16A34A" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+            </div>
+          </div>
+          <p className="text-3xl font-bold text-green-600">{stats.inscripciones.activas}</p>
+          <p className="text-xs text-gray-400 mt-1">{stats.miembros.total} registrados en total</p>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs text-gray-500">Por vencer (7 días)</p>
+            <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center">
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#D97706" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </div>
+          </div>
+          <p className="text-3xl font-bold text-amber-600">{stats.inscripciones.porVencer}</p>
+          <p className="text-xs text-gray-400 mt-1">requieren atención</p>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs text-gray-500">Vencidos</p>
+            <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center">
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#EF4444" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+              </svg>
+            </div>
+          </div>
+          <p className="text-3xl font-bold text-red-500">{stats.inscripciones.vencidas}</p>
+          <p className="text-xs text-gray-400 mt-1">sin renovar</p>
+        </div>
+
       </div>
 
-      <div className="grid grid-cols-3 gap-5">
+      {/* Fila 2 */}
+      <div className="grid grid-cols-3 gap-5 mb-5">
 
-        {/* Ingresos del mes */}
+        {/* Ingresos del período */}
         <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <p className="text-xs text-gray-500 mb-1">Ingresos este mes</p>
-          <p className="text-2xl font-bold text-gray-900">
-            Bs. {stats.ingresos.esteMes.toLocaleString('es-BO', { minimumFractionDigits: 2 })}
-          </p>
-          {variacionIngresos !== null && (
-            <p className={`text-xs mt-1 font-medium
-              ${Number(variacionIngresos) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-              {Number(variacionIngresos) >= 0 ? '+' : ''}{variacionIngresos}% vs mes anterior
-            </p>
-          )}
-          <p className="text-xs text-gray-400 mt-0.5">
-            Mes anterior: Bs. {stats.ingresos.mesAnterior.toLocaleString('es-BO', { minimumFractionDigits: 2 })}
-          </p>
+          <p className="text-xs text-gray-500 mb-1">Ingresos del período</p>
+          <p className="text-2xl font-bold text-gray-900">{fmt(stats.ingresos.total)}</p>
+          <div className="mt-0.5 mb-4">{variacionLabel(stats.ingresos.variacion)}</div>
 
-          {/* Gráfico de barras simple */}
-          {stats.ingresosPorMes.length > 0 && (
-            <div className="mt-5">
-              <p className="text-xs text-gray-400 mb-3">Últimos 6 meses</p>
-              <div className="flex items-end gap-2 h-20">
-                {stats.ingresosPorMes.map((m) => (
-                  <div key={m.mes} className="flex-1 flex flex-col items-center gap-1">
+          <div className="flex flex-col gap-2 mb-4">
+            {[
+              { label: 'Efectivo',      valor: stats.ingresos.efectivo,      color: 'bg-green-400'  },
+              { label: 'Transferencia', valor: stats.ingresos.transferencia, color: 'bg-blue-400'   },
+              { label: 'Tarjeta',       valor: stats.ingresos.tarjeta,       color: 'bg-purple-400' },
+            ].map((m) => (
+              <div key={m.label}>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-gray-500">{m.label}</span>
+                  <span className="font-medium text-gray-700">{fmt(m.valor)}</span>
+                </div>
+                <div className="w-full h-1.5 bg-gray-100 rounded-full">
+                  <div
+                    className={`h-full ${m.color} rounded-full`}
+                    style={{ width: `${stats.ingresos.total > 0 ? Math.min(100, (m.valor / stats.ingresos.total) * 100) : 0}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Mini gráfico ingresos por día */}
+          {stats.ingresosPorDia.length > 0 && (
+            <>
+              <p className="text-xs text-gray-400 mb-2">Ingresos por día</p>
+              <div className="flex items-end gap-1 h-16">
+                {stats.ingresosPorDia.map((d) => (
+                  <div key={d.dia} className="flex-1 flex flex-col items-center gap-0.5">
                     <div
-                      className="w-full bg-[#185FA5] rounded-t-md transition-all"
-                      style={{ height: `${(m.total / maxIngreso) * 100}%`, minHeight: '4px' }}
+                      className="w-full bg-[#185FA5] rounded-t-sm"
+                      style={{ height: `${(d.total / maxIngreso) * 100}%`, minHeight: '3px' }}
+                      title={`Día ${d.dia}: ${fmt(d.total)}`}
                     />
-                    <span className="text-[10px] text-gray-400 truncate w-full text-center">
-                      {m.mes.split(' ')[0]}
-                    </span>
+                    {stats.ingresosPorDia.length <= 10 && (
+                      <span className="text-[9px] text-gray-400">{d.dia}</span>
+                    )}
                   </div>
                 ))}
               </div>
+            </>
+          )}
+        </div>
+
+        {/* Inscripciones por día */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+          <p className="text-xs text-gray-500 mb-1">Inscripciones nuevas</p>
+          <p className="text-2xl font-bold text-gray-900">{stats.inscripciones.nuevas}</p>
+          {stats.inscripciones.nuevasAnterior > 0 && (
+            <p className="text-xs text-gray-400 mt-0.5 mb-4">
+              Mes anterior: {stats.inscripciones.nuevasAnterior}
+            </p>
+          )}
+
+          {stats.inscripcionesPorDia.length > 0 ? (
+            <>
+              <p className="text-xs text-gray-400 mb-2">Inscripciones por día</p>
+              <div className="flex items-end gap-1 h-24">
+                {stats.inscripcionesPorDia.map((d) => (
+                  <div key={d.dia} className="flex-1 flex flex-col items-center gap-0.5">
+                    <div
+                      className="w-full bg-green-400 rounded-t-sm"
+                      style={{ height: `${(d.total / maxInscripcion) * 100}%`, minHeight: '3px' }}
+                      title={`Día ${d.dia}: ${d.total} inscripción(es)`}
+                    />
+                    {stats.inscripcionesPorDia.length <= 10 && (
+                      <span className="text-[9px] text-gray-400">{d.dia}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-24 text-gray-300 text-sm">
+              Sin inscripciones en este período
             </div>
           )}
         </div>
 
-        {/* Total miembros */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <p className="text-xs text-gray-500 mb-1">Total de miembros</p>
-          <p className="text-2xl font-bold text-gray-900">{stats.miembros.total}</p>
-          <p className="text-xs text-gray-400 mt-0.5">registrados en el sistema</p>
-
-          <div className="mt-5 flex flex-col gap-3">
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-gray-500">Activos</span>
-                <span className="font-medium text-gray-700">{stats.inscripciones.totalActivos}</span>
-              </div>
-              <div className="w-full h-1.5 bg-gray-100 rounded-full">
-                <div
-                  className="h-full bg-blue-500 rounded-full"
-                  style={{ width: `${Math.min(100, stats.miembros.total > 0 ? (stats.inscripciones.totalActivos / stats.miembros.total) * 100 : 0)}%` }}
-
-                />
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-gray-500">Vencidos</span>
-                <span className="font-medium text-gray-700">{stats.inscripciones.vencidos}</span>
-              </div>
-              <div className="w-full h-1.5 bg-gray-100 rounded-full">
-                <div
-                  className="h-full bg-red-400 rounded-full"
-                  style={{ width: `${Math.min(100, stats.miembros.total > 0 ? (stats.inscripciones.vencidos / stats.miembros.total) * 100 : 0)}%` }}
-
-                />
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-gray-500">Por vencer</span>
-                <span className="font-medium text-gray-700">{stats.inscripciones.porVencer}</span>
-              </div>
-              <div className="w-full h-1.5 bg-gray-100 rounded-full">
-                <div
-                  className="h-full bg-amber-400 rounded-full"
-                  style={{ width: `${Math.min(100, stats.miembros.total > 0 ? (stats.inscripciones.porVencer / stats.miembros.total) * 100 : 0)}%` }}
-
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Por vencer — alertas */}
+        {/* Por vencer esta semana */}
         <div className="bg-white rounded-2xl border border-gray-200 p-5">
           <div className="flex items-center justify-between mb-4">
-            <p className="text-xs text-gray-500">Por vencer esta semana</p>
-            <Link
-              href="/inscripciones?filtro=por_vencer"
-              className="text-xs text-[#185FA5] hover:underline"
-            >
+            <p className="text-xs text-gray-500">
+              {esMesActual ? 'Por vencer esta semana' : 'Vencimientos próximos'}
+            </p>
+            <Link href="/inscripciones" className="text-xs text-[#185FA5] hover:underline">
               Ver todos
             </Link>
           </div>
@@ -236,20 +274,21 @@ export default function DashboardPage() {
               <p className="text-sm text-gray-400">Sin vencimientos próximos</p>
             </div>
           ) : (
-            <div className="flex flex-col gap-3">
-              {stats.porVencerDetalle.slice(0, 5).map((m) => (
+            <div className="flex flex-col gap-2">
+              {stats.porVencerDetalle.slice(0, 6).map((m) => (
                 <Link
                   key={m.id}
                   href={`/miembros/${m.miembroId}`}
-                  className="flex items-center justify-between hover:bg-gray-50 rounded-xl px-2 py-1.5 transition-colors"
+                  className="flex items-center justify-between hover:bg-gray-50
+                             rounded-xl px-2 py-1.5 transition-colors"
                 >
                   <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-full bg-amber-50 flex items-center justify-center
-                                    text-xs font-semibold text-amber-600 shrink-0">
+                    <div className="w-7 h-7 rounded-full bg-amber-50 flex items-center
+                                    justify-center text-xs font-semibold text-amber-600 shrink-0">
                       {m.miembroNombre[0]}{m.miembroApellido[0]}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-sm font-medium text-gray-900 leading-tight">
                         {m.miembroNombre} {m.miembroApellido}
                       </p>
                       <p className="text-xs text-gray-400">CI: {m.miembroCi}</p>
