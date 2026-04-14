@@ -9,6 +9,7 @@ import {
   Pagination,
   Badge,
   Avatar,
+  PeriodFilter,
 } from '@/components/ui'
 
 interface Inscripcion {
@@ -50,18 +51,23 @@ const estadoConfig: Record<string, { label: string; clase: string }> = {
 const LIMIT = 10
 
 export default function InscripcionesPage() {
-  const [inscripciones, setInscripciones] = useState<Inscripcion[]>([])
-  const [paginacion,    setPaginacion]    = useState<Paginacion>({ total: 0, page: 1, limit: LIMIT, totalPages: 0 })
-  const [conteos,       setConteos]       = useState<Conteos>({ todos: 0, activo: 0, por_vencer: 0, vencido: 0 })
-  const [loading,       setLoading]       = useState(true)
-  const [search,        setSearch]        = useState('')
-  const [filtro,        setFiltro]        = useState('todos')
-  const [page,          setPage]          = useState(1)
+  const hoy                                         = new Date()
+  const [mes,          setMes]                      = useState(hoy.getMonth() + 1)
+  const [anio,         setAnio]                     = useState(hoy.getFullYear())
+  const [inscripciones, setInscripciones]           = useState<Inscripcion[]>([])
+  const [paginacion,   setPaginacion]               = useState<Paginacion>({ total: 0, page: 1, limit: LIMIT, totalPages: 0 })
+  const [conteos,      setConteos]                  = useState<Conteos>({ todos: 0, activo: 0, por_vencer: 0, vencido: 0 })
+  const [loading,      setLoading]                  = useState(true)
+  const [search,       setSearch]                   = useState('')
+  const [filtro,       setFiltro]                   = useState('todos')
+  const [page,         setPage]                     = useState(1)
 
   const fetchInscripciones = useCallback(async (
     searchVal: string,
     filtroVal: string,
-    pageVal:   number
+    pageVal:   number,
+    mesVal:    number,
+    anioVal:   number,
   ) => {
     setLoading(true)
     try {
@@ -70,6 +76,8 @@ export default function InscripcionesPage() {
         estado: filtroVal,
         page:   String(pageVal),
         limit:  String(LIMIT),
+        mes:    String(mesVal),
+        anio:   String(anioVal),
       })
       const res  = await fetch(`/api/inscripciones?${params}`)
       const data = await res.json()
@@ -82,15 +90,25 @@ export default function InscripcionesPage() {
   }, [])
 
   useEffect(() => {
-    const timer = setTimeout(() => { setPage(1); fetchInscripciones(search, filtro, 1) }, 300)
+    const timer = setTimeout(() => {
+      setPage(1)
+      fetchInscripciones(search, filtro, 1, mes, anio)
+    }, 300)
     return () => clearTimeout(timer)
   }, [search])
 
   useEffect(() => {
-    fetchInscripciones(search, filtro, page)
+    fetchInscripciones(search, filtro, page, mes, anio)
   }, [filtro, page])
 
+  useEffect(() => {
+    setPage(1)
+    fetchInscripciones(search, filtro, 1, mes, anio)
+  }, [mes, anio])
+
   function handleFiltro(f: string) { setFiltro(f); setPage(1) }
+
+  function handlePeriod(m: number, a: number) { setMes(m); setAnio(a) }
 
   const tabs = [
     { key: 'todos',      label: 'Todos',      count: conteos.todos      },
@@ -102,6 +120,7 @@ export default function InscripcionesPage() {
   return (
     <>
       <Header titulo="Inscripciones" subtitulo="Historial de membresías registradas">
+        <PeriodFilter mes={mes} anio={anio} onChange={handlePeriod} />
         <Link
           href="/inscripciones/nueva"
           className="flex items-center gap-2 px-4 py-2.5 bg-[#185FA5] hover:bg-[#0C447C]
@@ -150,7 +169,10 @@ export default function InscripcionesPage() {
             ) : inscripciones.length === 0 ? (
               <tr>
                 <td colSpan={6} className="text-center py-12 text-gray-400 text-sm">
-                  {search || filtro !== 'todos' ? 'No se encontraron resultados' : 'No hay inscripciones registradas'}
+                  {search || filtro !== 'todos'
+                    ? 'No se encontraron resultados'
+                    : 'No hay inscripciones en este período'
+                  }
                 </td>
               </tr>
             ) : (
@@ -184,10 +206,16 @@ export default function InscripcionesPage() {
                     </td>
                     <td className="px-5 py-4">
                       <span className={`text-sm font-medium
-                        ${i.diasRestantes < 0 ? 'text-red-500' : i.diasRestantes <= 7 ? 'text-amber-600' : 'text-gray-700'}`}>
+                        ${i.diasRestantes < 0
+                          ? 'text-red-500'
+                          : i.diasRestantes <= 7
+                          ? 'text-amber-600'
+                          : 'text-gray-700'
+                        }`}>
                         {i.diasRestantes < 0
                           ? `Venció hace ${Math.abs(i.diasRestantes)}d`
-                          : `${i.diasRestantes} días`}
+                          : `${i.diasRestantes} días`
+                        }
                       </span>
                     </td>
                     <td className="px-5 py-4">
